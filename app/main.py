@@ -1,7 +1,17 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
+from app.database import Base, engine
 from app.routers.auth import router as auth_router
 from app.routers.todos import router as todos_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    yield
+
 
 SWAGGER_UI = {
     "displayOperationId": True,
@@ -15,6 +25,7 @@ app = FastAPI(
         {"name": "auth", "description": "User signup, signin and detailing"},
         {"name": "todos", "description": "To-do management"},
     ],
+    lifespan=lifespan,
 )
 
 app.include_router(auth_router)

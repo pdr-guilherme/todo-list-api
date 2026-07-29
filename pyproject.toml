@@ -12,18 +12,6 @@ ignore = ["S101"]
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
 
-[tool.mypy]
-python_version = "3.11"
-strict = true
-plugins = ["pydantic.mypy"]
-disallow_untyped_decorators = false
-
-[tool.pydantic-mypy]
-init_forbid_extra = true
-init_typed = true
-warn_required_dynamic_aliases = true
-
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["--tb=short", "-q", "--strict-markers"]
