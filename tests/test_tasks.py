@@ -137,6 +137,21 @@ def test_list_tasks_custom_page(authenticated_client, authenticated_user):
     assert not response_data["data"]
 
 
+def test_list_tasks_search_task_title(authenticated_client, authenticated_user):
+    factories.TaskFactory.create(user=authenticated_user, title="SEARCH 1")
+    factories.TaskFactory.create(user=authenticated_user, title="search 2")
+    factories.TaskFactory.create(user=authenticated_user, title="has search in title")
+    factories.TaskFactory.create_batch(3, user=authenticated_user, title="Other")
+
+    response = authenticated_client.get("/tasks/", params={"search": "search"})
+    assert response.status_code == status.HTTP_200_OK
+
+    response_data = response.json()
+    assert len(response_data["data"]) == 3
+    for task in response_data["data"]:
+        assert "search" in task["title"].lower()
+
+
 def test_get_task(authenticated_client, authenticated_user):
     task = factories.TaskFactory(user=authenticated_user)
     response = authenticated_client.get(f"/tasks/{task.id}")

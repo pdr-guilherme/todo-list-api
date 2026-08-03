@@ -54,8 +54,13 @@ def list_tasks(
     db: SessionDep,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
+    search: str | None = Query(default=None, min_length=1, max_length=100),
 ) -> TaskList:
     query = select(Task).where(Task.user_id == user.id).order_by(Task.id)
+
+    if search:
+        query = query.where(Task.title.ilike(f"%{search}%"))
+
     total = db.execute(
         select(func.count()).select_from(Task).where(Task.user_id == user.id)
     ).scalar_one()
