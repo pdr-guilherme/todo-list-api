@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, create_engine, event, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
-SQLITE_URL = "sqlite:///task_.db"
+SQLITE_URL = "sqlite:///tasks.db"
 CONNECT_ARGS = {"check_same_thread": False}
 engine = create_engine(SQLITE_URL, connect_args=CONNECT_ARGS)
 
