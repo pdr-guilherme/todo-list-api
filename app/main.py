@@ -4,7 +4,7 @@ from fastapi import FastAPI
 
 from app.database import Base, engine
 from app.routers.auth import router as auth_router
-from app.routers.todos import router as todos_router
+from app.routers.tasks import router as tasks_router
 
 
 @asynccontextmanager
@@ -23,10 +23,10 @@ app = FastAPI(
     swagger_ui_parameters=SWAGGER_UI,
     openapi_tags=[
         {"name": "auth", "description": "User signup, signin and detailing"},
-        {"name": "todos", "description": "To-do management"},
+        {"name": "tasks", "description": "Task management"},
     ],
     lifespan=lifespan,
 )
 
 app.include_router(auth_router)
-app.include_router(todos_router)
+app.include_router(tasks_router)

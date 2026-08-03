@@ -1,0 +1,126 @@
+from fastapi import APIRouter, Query, status
+from sqlalchemy import func, select
+
+from app.dependencies import CurrentTask, CurrentUser, SessionDep
+from app.models.tasks import Task
+from app.schema.tasks import (
+    TaskCreate,
+    TaskList,
+    TaskPartialUpdate,
+    TaskPublic,
+    TaskUpdate,
+)
+
+router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+@router.post(
+    "/",
+    operation_id="create_task",
+    status_code=status.HTTP_201_CREATED,
+    response_model=TaskPublic,
+)
+def create_task(
+    user: CurrentUser,
+    data: TaskCreate,
+    db: SessionDep,
+) -> TaskPublic:
+    db_task = Task(
+        user_id=user.id,
+        title=data.title,
+        description=data.description,
+        status=data.status,
+    )
+    db.add(db_task)
+    db.commit()
+    db.refresh(db_task)
+
+    return TaskPublic.model_validate(db_task)
+
+
+@router.get(
+    "/",
+    operation_id="list_tasks",
+    response_model=TaskList,
+)
+def list_tasks(
+    user: CurrentUser,
+    db: SessionDep,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
+) -> TaskList:
+    query = select(Task).where(Task.user_id == user.id).order_by(Task.id)
+    total = db.execute(
+        select(func.count()).select_from(Task).where(Task.user_id == user.id)
+    ).scalar_one()
+    tasks = db.execute(query.offset((page - 1) * limit).limit(limit)).scalars().all()
+
+    return TaskList(
+        data=[TaskPublic.model_validate(task) for task in tasks],
+        total=total,
+        page=page,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/{task_id}",
+    operation_id="get_task",
+    response_model=TaskPublic,
+)
+def get_task(
+    task: CurrentTask,
+) -> TaskPublic:
+    return TaskPublic.model_validate(task)
+
+
+@router.put(
+    "/{task_id}",
+    operation_id="update_task",
+    response_model=TaskPublic,
+)
+def update_task(
+    task: CurrentTask,
+    data: TaskUpdate,
+    db: SessionDep,
+) -> TaskPublic:
+    update_data = data.model_dump()
+    for field, value in update_data.items():
+        setattr(task, field, value)
+
+    db.commit()
+    db.refresh(task)
+    return TaskPublic.model_validate(task)
+
+
+@router.patch(
+    "/{task_id}",
+    operation_id="partial_update_task",
+    response_model=TaskPublic,
+)
+def partial_update_task(
+    task: CurrentTask,
+    data: TaskPartialUpdate,
+    db: SessionDep,
+) -> TaskPublic:
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(task, field, value)
+
+    db.commit()
+    db.refresh(task)
+    return TaskPublic.model_validate(task)
+
+
+@router.delete(
+    "/{task_id}",
+    operation_id="delete_task",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_task(
+    task: CurrentTask,
+    db: SessionDep,
+) -> None:
+    db.delete(task)
+    db.commit()
+    return None

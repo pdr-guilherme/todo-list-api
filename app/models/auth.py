@@ -1,7 +1,12 @@
+import typing
+
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+if typing.TYPE_CHECKING:
+    from app.models.tasks import Task
 
 
 class User(Base):
@@ -12,6 +17,9 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
     token: Mapped["Token"] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    tasks: Mapped[list["Task"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 

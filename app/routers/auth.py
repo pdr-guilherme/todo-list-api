@@ -1,12 +1,10 @@
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.dependencies import SessionDep, get_current_user
+from app.dependencies import CurrentUser, SessionDep
 from app.models.auth import Token, User
-from app.schema.auth import LoginData, TokenResponse, UserCreate, UserPublic
+from app.schema.auth import LoginData, TokenResponse, UserCreate
 from app.security import DUMMY_HASH, create_token, hash_password, verify_password
 
 router = APIRouter(tags=["auth"])
@@ -59,7 +57,5 @@ def login(data: LoginData, db: SessionDep) -> TokenResponse:
 
 
 @router.get("/me", operation_id="get_profile")
-def get_profile(
-    user: Annotated[UserPublic, Depends(get_current_user)],
-):
+def get_profile(user: CurrentUser):
     return user

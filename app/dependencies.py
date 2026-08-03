@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.auth import Token
+from app.models.tasks import Task
 from app.schema.auth import UserPublic
 
 SessionDep = Annotated[Session, Depends(get_db)]
@@ -27,3 +28,19 @@ def get_current_user(
         )
 
     return UserPublic.model_validate(db_token.user)
+
+
+CurrentUser = Annotated[UserPublic, Depends(get_current_user)]
+
+
+def get_task_or_404(task_id: int, db: SessionDep, user: CurrentUser) -> Task:
+    task = db.get(Task, task_id)
+    if task is None or task.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
+        )
+
+    return task
+
+
+CurrentTask = Annotated[Task, Depends(get_task_or_404)]
