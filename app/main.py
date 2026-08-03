@@ -19,12 +19,14 @@ SWAGGER_UI = {
 }
 
 app = FastAPI(
-    title="To-do list API",
-    swagger_ui_parameters=SWAGGER_UI,
+    title="To-do List API",
+    description="Restful API for task management with token authentication.",
+    contact={"name": "Pedro Guilherme", "url": "https://github.com/pdr-guilherme"},
     openapi_tags=[
-        {"name": "auth", "description": "User signup, signin and detailing"},
-        {"name": "tasks", "description": "Task management"},
+        {"name": "auth", "description": "Create, authenticate and read user accounts"},
+        {"name": "tasks", "description": "Create, read, update and delete tasks"},
     ],
+    swagger_ui_parameters=SWAGGER_UI,
     lifespan=lifespan,
 )
 

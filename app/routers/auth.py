@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.dependencies import CurrentUser, SessionDep
 from app.models.auth import Token, User
-from app.schema.auth import LoginData, TokenResponse, UserCreate
+from app.schema.auth import LoginData, TokenResponse, UserCreate, UserPublic
 from app.security import DUMMY_HASH, create_token, hash_password, verify_password
 
 router = APIRouter(tags=["auth"])
@@ -13,6 +13,8 @@ router = APIRouter(tags=["auth"])
 @router.post(
     "/register",
     operation_id="register",
+    summary="Create an account",
+    description="Creates a new account and returns an authentication token",
     status_code=status.HTTP_201_CREATED,
     response_model=TokenResponse,
 )
@@ -42,7 +44,12 @@ def register(data: UserCreate, db: SessionDep) -> TokenResponse:
     return response
 
 
-@router.post("/login", operation_id="login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    operation_id="login",
+    description="Validates the given credentials and returns an authentication token",
+    response_model=TokenResponse,
+)
 def login(data: LoginData, db: SessionDep) -> TokenResponse:
     user = db.execute(select(User).where(User.email == data.email)).scalar_one_or_none()
     hashed = user.hashed_password if user else DUMMY_HASH
@@ -56,6 +63,12 @@ def login(data: LoginData, db: SessionDep) -> TokenResponse:
     return TokenResponse(token=user.token.key)
 
 
-@router.get("/me", operation_id="get_profile")
-def get_profile(user: CurrentUser):
+@router.get(
+    "/me",
+    summary="Get user data",
+    description="Searches for the authenticated user and returns its data",
+    operation_id="get_profile",
+    response_model=UserPublic,
+)
+def get_profile(user: CurrentUser) -> UserPublic:
     return user

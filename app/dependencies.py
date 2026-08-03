@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Path, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -33,7 +33,11 @@ def get_current_user(
 CurrentUser = Annotated[UserPublic, Depends(get_current_user)]
 
 
-def get_task_or_404(task_id: int, db: SessionDep, user: CurrentUser) -> Task:
+def get_task_or_404(
+    task_id: Annotated[int, Path(description="Task ID", ge=1)],
+    db: SessionDep,
+    user: CurrentUser,
+) -> Task:
     task = db.get(Task, task_id)
     if task is None or task.user_id != user.id:
         raise HTTPException(

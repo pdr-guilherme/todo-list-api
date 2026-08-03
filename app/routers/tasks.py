@@ -17,8 +17,11 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 @router.post(
     "/",
     operation_id="create_task",
+    summary="Create a new task",
+    description="Creates a task linked to the authenticated user. Title is required.",
     status_code=status.HTTP_201_CREATED,
     response_model=TaskPublic,
+    responses={404: {"description": "Task not found"}},
 )
 def create_task(
     user: CurrentUser,
@@ -41,7 +44,10 @@ def create_task(
 @router.get(
     "/",
     operation_id="list_tasks",
+    summary="List all tasks",
+    description="List all tasks belonging to the authenticated user.",
     response_model=TaskList,
+    responses={404: {"description": "Task not found"}},
 )
 def list_tasks(
     user: CurrentUser,
@@ -66,7 +72,10 @@ def list_tasks(
 @router.get(
     "/{task_id}",
     operation_id="get_task",
+    summary="Detail a task",
+    description="Returns all details from a task.",
     response_model=TaskPublic,
+    responses={404: {"description": "Task not found"}},
 )
 def get_task(
     task: CurrentTask,
@@ -77,7 +86,10 @@ def get_task(
 @router.put(
     "/{task_id}",
     operation_id="update_task",
+    summary="Update a task",
+    description="Updates a task. All fields are required",
     response_model=TaskPublic,
+    responses={404: {"description": "Task not found"}},
 )
 def update_task(
     task: CurrentTask,
@@ -96,7 +108,10 @@ def update_task(
 @router.patch(
     "/{task_id}",
     operation_id="partial_update_task",
+    summary="Partially update a task",
+    description="Updates a task. Only sent fields are updated.",
     response_model=TaskPublic,
+    responses={404: {"description": "Task not found"}},
 )
 def partial_update_task(
     task: CurrentTask,
@@ -115,7 +130,9 @@ def partial_update_task(
 @router.delete(
     "/{task_id}",
     operation_id="delete_task",
+    summary="Delete a task",
     status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: {"description": "Task not found"}},
 )
 def delete_task(
     task: CurrentTask,

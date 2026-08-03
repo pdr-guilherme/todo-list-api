@@ -11,40 +11,59 @@ class TaskStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
-class TaskCreate(BaseModel):
+class TaskBase(BaseModel):
+    title: str = Field(min_length=1, max_length=100, description="Task title.")
+    description: str | None = Field(
+        default=None, max_length=300, description="Optional task description."
+    )
+
+
+class TaskCreate(TaskBase):
     model_config = ConfigDict(str_strip_whitespace=True)
+    status: TaskStatus | None = Field(
+        default=TaskStatus.PENDING, description="Task status. Defaults to pending."
+    )
 
-    title: str = Field(min_length=1)
-    description: str | None = None
-    status: TaskStatus | None = TaskStatus.PENDING
 
-
-class TaskPublic(TaskCreate):
+class TaskPublic(TaskBase):
     model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    created_at: datetime
-    updated_at: datetime
+    id: int = Field(description="Task ID", json_schema_extra={"readOnly": True})
+    status: TaskStatus = Field(description="Task status.")
+    created_at: datetime = Field(
+        description="...", json_schema_extra={"readOnly": True}
+    )
+    updated_at: datetime = Field(
+        description="...", json_schema_extra={"readOnly": True}
+    )
 
 
 class TaskList(BaseModel):
-    data: list[TaskPublic]
-    page: int
-    limit: int
-    total: int
+    data: list[TaskPublic] = Field(description="List of user tasks.")
+    page: int = Field(description="Current data page.")
+    limit: int = Field(description="Number of tasks to be returned.")
+    total: int = Field(description="Total count of user tasks.")
 
 
 class TaskUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    title: str = Field(min_length=1, max_length=100)
-    description: str | None
-    status: TaskStatus
+    title: str = Field(
+        min_length=1, max_length=100, description="Task title. Can not be empty"
+    )
+    description: str | None = Field(max_length=300, description="Task description.")
+    status: TaskStatus = Field(description="Task status.")
 
 
 class TaskPartialUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    title: str | None = Field(default=None, min_length=1, max_length=100)
-    description: str | None = None
-    status: TaskStatus | None = None
+    title: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+        description="Task title.",
+    )
+    description: str | None = Field(
+        default=None, max_length=300, description="Optional task description."
+    )
+    status: TaskStatus | None = Field(default=None, description="Task status.")
