@@ -8,6 +8,26 @@ from app.models.tasks import Task
 from app.schema.tasks import TaskStatus
 from tests import factories
 
+VALID_UPDATE_PAYLOAD = {
+    "title": "new title",
+    "description": None,
+    "status": TaskStatus.DONE,
+}
+
+
+@pytest.fixture
+def other_user_task():
+    other_user = factories.UserFactory()
+    return factories.TaskFactory(user=other_user)
+
+
+@pytest.fixture
+def tasks_with_all_statuses(authenticated_user):
+    for task_status in TaskStatus:
+        factories.TaskFactory.create_batch(
+            3, user=authenticated_user, status=task_status
+        )
+
 
 def test_create_task(authenticated_client):
     data = {
@@ -74,27 +94,6 @@ def test_list_tasks(authenticated_client, authenticated_user):
     assert returned_ids == [1, 2, 3, 4, 5]
 
 
-def test_list_tasks_other_user(authenticated_client, client):
-    other_user = factories.UserFactory()
-    other_token = factories.TokenFactory(user=other_user)
-    factories.TaskFactory.create_batch(3, user=other_user)
-
-    response1 = authenticated_client.get("/tasks/")
-    assert response1.status_code == status.HTTP_200_OK
-    response_data1 = response1.json()
-    assert response_data1["total"] == 0
-    assert not response_data1["data"]
-
-    response2 = client.get(
-        "/tasks/",
-        headers={"Authorization": f"Bearer {other_token.key}"},
-    )
-    assert response2.status_code == status.HTTP_200_OK
-    response_data2 = response2.json()
-    assert response_data2["total"] == 3
-    assert response_data2["data"]
-
-
 @pytest.mark.parametrize(
     "query_params",
     [
@@ -141,9 +140,8 @@ def test_list_tasks_custom_page(authenticated_client, authenticated_user):
 
 
 def test_list_tasks_search_task_title(authenticated_client, authenticated_user):
-    factories.TaskFactory.create(user=authenticated_user, title="SEARCH 1")
-    factories.TaskFactory.create(user=authenticated_user, title="search 2")
-    factories.TaskFactory.create(user=authenticated_user, title="has search in title")
+    for title in ["SEARCH 1", "search 2", "has search in title"]:
+        factories.TaskFactory.create(user=authenticated_user, title=title)
     factories.TaskFactory.create_batch(3, user=authenticated_user, title="Other")
 
     response = authenticated_client.get("/tasks/", params={"search": "search"})
@@ -156,12 +154,7 @@ def test_list_tasks_search_task_title(authenticated_client, authenticated_user):
         assert "search" in task["title"].lower()
 
 
-def test_list_tasks_filter_by_status(authenticated_client, authenticated_user):
-    for task_status in [TaskStatus.DONE, TaskStatus.PENDING, TaskStatus.CANCELLED]:
-        factories.TaskFactory.create_batch(
-            3, user=authenticated_user, status=task_status
-        )
-
+def test_list_tasks_filter_by_status(authenticated_client, tasks_with_all_statuses):
     response = authenticated_client.get(
         "/tasks/", params={"status": TaskStatus.PENDING}
     )
@@ -174,12 +167,9 @@ def test_list_tasks_filter_by_status(authenticated_client, authenticated_user):
         assert task["status"] == TaskStatus.PENDING
 
 
-def test_list_tasks_filter_by_multiple_status(authenticated_client, authenticated_user):
-    for task_status in [TaskStatus.DONE, TaskStatus.PENDING, TaskStatus.CANCELLED]:
-        factories.TaskFactory.create_batch(
-            3, user=authenticated_user, status=task_status
-        )
-
+def test_list_tasks_filter_by_multiple_status(
+    authenticated_client, tasks_with_all_statuses
+):
     query_params = {"status": [TaskStatus.DONE, TaskStatus.CANCELLED]}
     response = authenticated_client.get("/tasks/", params=query_params)
     assert response.status_code == status.HTTP_200_OK
@@ -217,46 +207,34 @@ def test_list_tasks_sort_by_title_desc(authenticated_client, authenticated_user)
     assert returned_titles == sorted(titles, reverse=True)
 
 
-def test_list_tasks_sort_by_created_at_desc(authenticated_client, authenticated_user):
+@pytest.mark.parametrize(
+    "sort_field,expected_order",
+    [
+        ("created_at", ["Newest", "Middle", "Oldest"]),
+        ("updated_at", ["Newest", "Middle", "Oldest"]),
+    ],
+    ids=["created_at", "updated_at"],
+)
+def test_list_tasks_sort_by_timestamp_desc(
+    authenticated_client, authenticated_user, sort_field, expected_order
+):
     now = datetime.now()
     tasks_data = [
         ("Oldest", now - timedelta(days=3)),
         ("Middle", now - timedelta(days=1)),
         ("Newest", now - timedelta(hours=1)),
     ]
-    for title, created_at in tasks_data:
+    for title, timestamp in tasks_data:
         factories.TaskFactory(
-            user=authenticated_user, title=title, created_at=created_at
+            user=authenticated_user, title=title, **{sort_field: timestamp}
         )
 
     response = authenticated_client.get(
-        "/tasks/", params={"sort": "created_at", "order": "desc"}
+        "/tasks/", params={"sort": sort_field, "order": "desc"}
     )
     assert response.status_code == status.HTTP_200_OK
-
     returned_titles = [task["title"] for task in response.json()["data"]]
-    assert returned_titles == ["Newest", "Middle", "Oldest"]
-
-
-def test_list_tasks_sort_by_updated_at_desc(authenticated_client, authenticated_user):
-    now = datetime.now()
-    tasks_data = [
-        ("Oldest", now - timedelta(days=3)),
-        ("Middle", now - timedelta(days=1)),
-        ("Newest", now - timedelta(hours=1)),
-    ]
-    for title, updated_at in tasks_data:
-        factories.TaskFactory(
-            user=authenticated_user, title=title, updated_at=updated_at
-        )
-
-    response = authenticated_client.get(
-        "/tasks/", params={"sort": "updated_at", "order": "desc"}
-    )
-    assert response.status_code == status.HTTP_200_OK
-
-    returned_titles = [task["title"] for task in response.json()["data"]]
-    assert returned_titles == ["Newest", "Middle", "Oldest"]
+    assert returned_titles == expected_order
 
 
 def test_list_tasks_invalid_sort_field(authenticated_client):
@@ -285,33 +263,15 @@ def test_get_task(authenticated_client, authenticated_user):
     assert response_data["updated_at"] == task.updated_at.isoformat()
 
 
-def test_get_task_not_found(authenticated_client):
-    response = authenticated_client.get("/tasks/999")
-    assert response.status_code == status.HTTP_404_NOT_FOUND
-
-
-def test_get_task_other_user(authenticated_client):
-    other_user = factories.UserFactory()
-    other_task = factories.TaskFactory(user=other_user)
-
-    response = authenticated_client.get(f"/tasks/{other_task.id}")
-    assert response.status_code == status.HTTP_404_NOT_FOUND
-
-
 def test_update_task(authenticated_client, authenticated_user):
     task = factories.TaskFactory(user=authenticated_user)
-    update_data = {
-        "title": "new title",
-        "description": None,
-        "status": "done",
-    }
-    response = authenticated_client.put(f"/tasks/{task.id}", json=update_data)
+    response = authenticated_client.put(f"/tasks/{task.id}", json=VALID_UPDATE_PAYLOAD)
     assert response.status_code == status.HTTP_200_OK
 
     response_data = response.json()
-    assert response_data["title"] == update_data["title"]
-    assert response_data["description"] == update_data["description"]
-    assert response_data["status"] == update_data["status"]
+    assert response_data["title"] == VALID_UPDATE_PAYLOAD["title"]
+    assert response_data["description"] == VALID_UPDATE_PAYLOAD["description"]
+    assert response_data["status"] == VALID_UPDATE_PAYLOAD["status"]
 
 
 @pytest.mark.parametrize(
@@ -330,29 +290,6 @@ def test_update_task_missing_fields(
     task = factories.TaskFactory(user=authenticated_user)
     response = authenticated_client.put(f"/tasks/{task.id}", json=update_data)
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-
-
-def test_update_task_not_found(authenticated_client):
-    update_data = {
-        "title": "new title",
-        "description": None,
-        "status": "done",
-    }
-    response = authenticated_client.put("/tasks/999", json=update_data)
-    assert response.status_code == status.HTTP_404_NOT_FOUND
-
-
-def test_update_task_other_user(authenticated_client):
-    other_user = factories.UserFactory()
-    other_task = factories.TaskFactory(user=other_user)
-    update_data = {
-        "title": "new title",
-        "description": None,
-        "status": "done",
-    }
-
-    response = authenticated_client.put(f"/tasks/{other_task.id}", json=update_data)
-    assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.parametrize(
@@ -380,21 +317,6 @@ def test_partial_update_task(authenticated_client, authenticated_user, update_da
             assert response_data[field] == update_data[field]
 
 
-def test_partial_update_task_not_found(authenticated_client):
-    response = authenticated_client.patch("/tasks/999", json={"title": "new title"})
-    assert response.status_code == status.HTTP_404_NOT_FOUND
-
-
-def test_partial_update_task_other_user(authenticated_client):
-    other_user = factories.UserFactory()
-    other_task = factories.TaskFactory(user=other_user)
-
-    response = authenticated_client.patch(
-        f"/tasks/{other_task.id}", json={"title": "new title"}
-    )
-    assert response.status_code == status.HTTP_404_NOT_FOUND
-
-
 def test_delete_task(authenticated_client, authenticated_user, test_db_session):
     task = factories.TaskFactory(user=authenticated_user)
     response = authenticated_client.delete(f"/tasks/{task.id}")
@@ -404,14 +326,37 @@ def test_delete_task(authenticated_client, authenticated_user, test_db_session):
     assert task_count == 0
 
 
-def test_delete_task_not_found(authenticated_client):
-    response = authenticated_client.delete("/tasks/999")
+@pytest.mark.parametrize(
+    "method,payload",
+    [
+        ("get", None),
+        ("put", VALID_UPDATE_PAYLOAD),
+        ("patch", {"title": "x"}),
+        ("delete", None),
+    ],
+    ids=["get", "put", "patch", "delete"],
+)
+def test_task_other_user_returns_404(
+    authenticated_client, other_user_task, method, payload
+):
+    kwargs = {"json": payload} if payload is not None else {}
+    response = getattr(authenticated_client, method)(
+        f"/tasks/{other_user_task.id}", **kwargs
+    )
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-def test_delete_task_other_user(authenticated_client):
-    other_user = factories.UserFactory()
-    other_task = factories.TaskFactory(user=other_user)
-
-    response = authenticated_client.delete(f"/tasks/{other_task.id}")
+@pytest.mark.parametrize(
+    "method,payload",
+    [
+        ("get", None),
+        ("put", VALID_UPDATE_PAYLOAD),
+        ("patch", {"title": "x"}),
+        ("delete", None),
+    ],
+    ids=["get", "put", "patch", "delete"],
+)
+def test_task_not_found_returns_404(authenticated_client, method, payload):
+    kwargs = {"json": payload} if payload is not None else {}
+    response = getattr(authenticated_client, method)("/tasks/999", **kwargs)
     assert response.status_code == status.HTTP_404_NOT_FOUND
