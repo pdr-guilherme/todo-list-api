@@ -44,6 +44,13 @@ class TaskList(BaseModel):
     total: int = Field(description="Total count of user tasks.")
 
 
+class TaskListQueryParams(BaseModel):
+    page: int = Field(default=1, ge=1)
+    limit: int = Field(default=10, ge=1, le=100)
+    search: str | None = Field(default=None, min_length=1, max_length=100)
+    task_status: list[TaskStatus] | None = Field(default=None, alias="status")
+
+
 class TaskUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 

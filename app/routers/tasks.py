@@ -8,9 +8,9 @@ from app.models.tasks import Task
 from app.schema.tasks import (
     TaskCreate,
     TaskList,
+    TaskListQueryParams,
     TaskPartialUpdate,
     TaskPublic,
-    TaskStatus,
     TaskUpdate,
 )
 
@@ -55,30 +55,35 @@ def create_task(
 def list_tasks(
     user: CurrentUser,
     db: SessionDep,
-    page: Annotated[int, Query(ge=1)] = 1,
-    limit: Annotated[int, Query(ge=1, le=100)] = 10,
-    search: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
-    task_status: Annotated[list[TaskStatus] | None, Query(alias="status")] = None,
+    query_params: Annotated[TaskListQueryParams, Query()],
 ) -> TaskList:
     query = select(Task).where(Task.user_id == user.id).order_by(Task.id)
     count_query = select(func.count()).select_from(Task).where(Task.user_id == user.id)
 
-    if search:
-        query = query.where(Task.title.ilike(f"%{search}%"))
-        count_query = count_query.where(Task.title.ilike(f"%{search}%"))
+    if query_params.search:
+        query = query.where(Task.title.ilike(f"%{query_params.search}%"))
+        count_query = count_query.where(Task.title.ilike(f"%{query_params.search}%"))
 
-    if task_status:
-        query = query.where(Task.status.in_(task_status))
-        count_query = count_query.where(Task.status.in_(task_status))
+    if query_params.task_status:
+        query = query.where(Task.status.in_(query_params.task_status))
+        count_query = count_query.where(Task.status.in_(query_params.task_status))
 
-    tasks = db.execute(query.offset((page - 1) * limit).limit(limit)).scalars().all()
+    tasks = (
+        db.execute(
+            query.offset((query_params.page - 1) * query_params.limit).limit(
+                query_params.limit
+            )
+        )
+        .scalars()
+        .all()
+    )
     total = db.execute(count_query).scalar_one()
 
     return TaskList(
         data=[TaskPublic.model_validate(task) for task in tasks],
         total=total,
-        page=page,
-        limit=limit,
+        page=query_params.page,
+        limit=query_params.limit,
     )
 
 
