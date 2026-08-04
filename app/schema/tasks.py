@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -20,6 +21,7 @@ class TaskBase(BaseModel):
 
 class TaskCreate(TaskBase):
     model_config = ConfigDict(str_strip_whitespace=True)
+
     status: TaskStatus | None = Field(
         default=TaskStatus.PENDING, description="Task status. Defaults to pending."
     )
@@ -27,6 +29,7 @@ class TaskCreate(TaskBase):
 
 class TaskPublic(TaskBase):
     model_config = ConfigDict(from_attributes=True)
+
     id: int = Field(description="Task ID", json_schema_extra={"readOnly": True})
     status: TaskStatus = Field(description="Task status.")
     created_at: datetime = Field(
@@ -45,10 +48,16 @@ class TaskList(BaseModel):
 
 
 class TaskListQueryParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     page: int = Field(default=1, ge=1)
     limit: int = Field(default=10, ge=1, le=100)
     search: str | None = Field(default=None, min_length=1, max_length=100)
     task_status: list[TaskStatus] | None = Field(default=None, alias="status")
+    sort: Literal["id", "title", "created_at", "updated_at"] | None = Field(
+        default=None
+    )
+    order: Literal["asc", "desc"] | None = Field(default=None)
 
 
 class TaskUpdate(BaseModel):

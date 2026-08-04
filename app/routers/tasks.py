@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 
 from app.dependencies import CurrentTask, CurrentUser, SessionDep
 from app.models.tasks import Task
@@ -57,7 +57,7 @@ def list_tasks(
     db: SessionDep,
     query_params: Annotated[TaskListQueryParams, Query()],
 ) -> TaskList:
-    query = select(Task).where(Task.user_id == user.id).order_by(Task.id)
+    query = select(Task).where(Task.user_id == user.id)
     count_query = select(func.count()).select_from(Task).where(Task.user_id == user.id)
 
     if query_params.search:
@@ -67,6 +67,13 @@ def list_tasks(
     if query_params.task_status:
         query = query.where(Task.status.in_(query_params.task_status))
         count_query = count_query.where(Task.status.in_(query_params.task_status))
+
+    sort_column = getattr(Task, query_params.sort or "id")
+    sort_order = query_params.order or "asc"
+    if sort_order == "desc":
+        sort_column = desc(sort_column)
+
+    query = query.order_by(sort_column)
 
     tasks = (
         db.execute(

@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 import pytest
 from fastapi import status
 from sqlalchemy import func, select
@@ -187,6 +189,86 @@ def test_list_tasks_filter_by_multiple_status(authenticated_client, authenticate
     assert len(response_data["data"]) == 6
     for task in response_data["data"]:
         assert task["status"] in [TaskStatus.DONE, TaskStatus.CANCELLED]
+
+
+def test_list_tasks_sort_by_title_asc(authenticated_client, authenticated_user):
+    titles = ["Whale", "Crab", "Shark"]
+    for title in titles:
+        factories.TaskFactory(user=authenticated_user, title=title)
+
+    response = authenticated_client.get("/tasks/", params={"sort": "title"})
+    assert response.status_code == status.HTTP_200_OK
+
+    returned_titles = [task["title"] for task in response.json()["data"]]
+    assert returned_titles == sorted(titles)
+
+
+def test_list_tasks_sort_by_title_desc(authenticated_client, authenticated_user):
+    titles = ["Whale", "Crab", "Shark"]
+    for title in titles:
+        factories.TaskFactory(user=authenticated_user, title=title)
+
+    response = authenticated_client.get(
+        "/tasks/", params={"sort": "title", "order": "desc"}
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    returned_titles = [task["title"] for task in response.json()["data"]]
+    assert returned_titles == sorted(titles, reverse=True)
+
+
+def test_list_tasks_sort_by_created_at_desc(authenticated_client, authenticated_user):
+    now = datetime.now()
+    tasks_data = [
+        ("Oldest", now - timedelta(days=3)),
+        ("Middle", now - timedelta(days=1)),
+        ("Newest", now - timedelta(hours=1)),
+    ]
+    for title, created_at in tasks_data:
+        factories.TaskFactory(
+            user=authenticated_user, title=title, created_at=created_at
+        )
+
+    response = authenticated_client.get(
+        "/tasks/", params={"sort": "created_at", "order": "desc"}
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    returned_titles = [task["title"] for task in response.json()["data"]]
+    assert returned_titles == ["Newest", "Middle", "Oldest"]
+
+
+def test_list_tasks_sort_by_updated_at_desc(authenticated_client, authenticated_user):
+    now = datetime.now()
+    tasks_data = [
+        ("Oldest", now - timedelta(days=3)),
+        ("Middle", now - timedelta(days=1)),
+        ("Newest", now - timedelta(hours=1)),
+    ]
+    for title, updated_at in tasks_data:
+        factories.TaskFactory(
+            user=authenticated_user, title=title, updated_at=updated_at
+        )
+
+    response = authenticated_client.get(
+        "/tasks/", params={"sort": "updated_at", "order": "desc"}
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    returned_titles = [task["title"] for task in response.json()["data"]]
+    assert returned_titles == ["Newest", "Middle", "Oldest"]
+
+
+def test_list_tasks_invalid_sort_field(authenticated_client):
+    response = authenticated_client.get("/tasks/", params={"sort": "not_a_real_field"})
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def test_list_tasks_invalid_order_value(authenticated_client):
+    response = authenticated_client.get(
+        "/tasks/", params={"sort": "title", "order": "sideways"}
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 def test_get_task(authenticated_client, authenticated_user):
