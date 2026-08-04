@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Query, status
 from sqlalchemy import func, select
 
@@ -8,6 +10,7 @@ from app.schema.tasks import (
     TaskList,
     TaskPartialUpdate,
     TaskPublic,
+    TaskStatus,
     TaskUpdate,
 )
 
@@ -52,19 +55,24 @@ def create_task(
 def list_tasks(
     user: CurrentUser,
     db: SessionDep,
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=10, ge=1, le=100),
-    search: str | None = Query(default=None, min_length=1, max_length=100),
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+    search: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
+    task_status: Annotated[list[TaskStatus] | None, Query(alias="status")] = None,
 ) -> TaskList:
     query = select(Task).where(Task.user_id == user.id).order_by(Task.id)
+    count_query = select(func.count()).select_from(Task).where(Task.user_id == user.id)
 
     if search:
         query = query.where(Task.title.ilike(f"%{search}%"))
+        count_query = count_query.where(Task.title.ilike(f"%{search}%"))
 
-    total = db.execute(
-        select(func.count()).select_from(Task).where(Task.user_id == user.id)
-    ).scalar_one()
+    if task_status:
+        query = query.where(Task.status.in_(task_status))
+        count_query = count_query.where(Task.status.in_(task_status))
+
     tasks = db.execute(query.offset((page - 1) * limit).limit(limit)).scalars().all()
+    total = db.execute(count_query).scalar_one()
 
     return TaskList(
         data=[TaskPublic.model_validate(task) for task in tasks],

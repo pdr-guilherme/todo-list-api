@@ -3,6 +3,7 @@ from fastapi import status
 from sqlalchemy import func, select
 
 from app.models.tasks import Task
+from app.schema.tasks import TaskStatus
 from tests import factories
 
 
@@ -147,9 +148,45 @@ def test_list_tasks_search_task_title(authenticated_client, authenticated_user):
     assert response.status_code == status.HTTP_200_OK
 
     response_data = response.json()
+    assert response_data["total"] == 3
     assert len(response_data["data"]) == 3
     for task in response_data["data"]:
         assert "search" in task["title"].lower()
+
+
+def test_list_tasks_filter_by_status(authenticated_client, authenticated_user):
+    for task_status in [TaskStatus.DONE, TaskStatus.PENDING, TaskStatus.CANCELLED]:
+        factories.TaskFactory.create_batch(
+            3, user=authenticated_user, status=task_status
+        )
+
+    response = authenticated_client.get(
+        "/tasks/", params={"status": TaskStatus.PENDING}
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    response_data = response.json()
+    assert response_data["total"] == 3
+    assert len(response_data["data"]) == 3
+    for task in response_data["data"]:
+        assert task["status"] == TaskStatus.PENDING
+
+
+def test_list_tasks_filter_by_multiple_status(authenticated_client, authenticated_user):
+    for task_status in [TaskStatus.DONE, TaskStatus.PENDING, TaskStatus.CANCELLED]:
+        factories.TaskFactory.create_batch(
+            3, user=authenticated_user, status=task_status
+        )
+
+    query_params = {"status": [TaskStatus.DONE, TaskStatus.CANCELLED]}
+    response = authenticated_client.get("/tasks/", params=query_params)
+    assert response.status_code == status.HTTP_200_OK
+
+    response_data = response.json()
+    assert response_data["total"] == 6
+    assert len(response_data["data"]) == 6
+    for task in response_data["data"]:
+        assert task["status"] in [TaskStatus.DONE, TaskStatus.CANCELLED]
 
 
 def test_get_task(authenticated_client, authenticated_user):
