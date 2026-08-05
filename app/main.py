@@ -1,8 +1,11 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.database import Base, engine
+from app.rate_limit import limiter
 from app.routers.auth import router as auth_router
 from app.routers.tasks import router as tasks_router
 
@@ -13,11 +16,6 @@ async def lifespan(app: FastAPI):
     yield
 
 
-SWAGGER_UI = {
-    "displayOperationId": True,
-    "syntaxHighlight.theme": "tomorrow-night",
-}
-
 app = FastAPI(
     title="To-do List API",
     description="Restful API for task management with token authentication.",
@@ -26,9 +24,14 @@ app = FastAPI(
         {"name": "auth", "description": "Create, authenticate and read user accounts"},
         {"name": "tasks", "description": "Create, read, update and delete tasks"},
     ],
-    swagger_ui_parameters=SWAGGER_UI,
+    swagger_ui_parameters={
+        "displayOperationId": True,
+        "syntaxHighlight.theme": "tomorrow-night",
+    },
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore
 
 app.include_router(auth_router)
 app.include_router(tasks_router)

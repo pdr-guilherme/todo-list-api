@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
-from app.main import app
+from app.main import app, limiter
 from tests.factories import TaskFactory, TokenFactory, UserFactory
 
 SQLITE_TEST_URL = "sqlite://"
@@ -39,6 +39,12 @@ def setup_factories(test_db_session):
     UserFactory._meta.sqlalchemy_session = test_db_session  # type: ignore
     TokenFactory._meta.sqlalchemy_session = test_db_session  # type: ignore
     TaskFactory._meta.sqlalchemy_session = test_db_session  # type: ignore
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    limiter.reset()
+    yield
 
 
 @pytest.fixture(scope="function")
