@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.dependencies import CurrentUser, SessionDep
 from app.models.auth import Token, User
+from app.rate_limit import limiter
 from app.schema.auth import LoginData, TokenResponse, UserCreate, UserPublic
 from app.security import DUMMY_HASH, create_token, hash_password, verify_password
 
@@ -18,7 +19,13 @@ router = APIRouter(tags=["auth"])
     status_code=status.HTTP_201_CREATED,
     response_model=TokenResponse,
 )
-def register(data: UserCreate, db: SessionDep) -> TokenResponse:
+@limiter.limit("3/minute")
+def register(
+    request: Request,
+    response: Response,
+    data: UserCreate,
+    db: SessionDep,
+) -> TokenResponse:
     hashed_password = hash_password(data.password)
     db_user = User(name=data.name, email=data.email, hashed_password=hashed_password)
 
@@ -50,7 +57,13 @@ def register(data: UserCreate, db: SessionDep) -> TokenResponse:
     description="Validates the given credentials and returns an authentication token",
     response_model=TokenResponse,
 )
-def login(data: LoginData, db: SessionDep) -> TokenResponse:
+@limiter.limit("5/minute")
+def login(
+    request: Request,
+    response: Response,
+    data: LoginData,
+    db: SessionDep,
+) -> TokenResponse:
     user = db.execute(select(User).where(User.email == data.email)).scalar_one_or_none()
     hashed = user.hashed_password if user else DUMMY_HASH
     password_valid = verify_password(data.password, hashed)

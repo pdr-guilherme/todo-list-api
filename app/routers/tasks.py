@@ -1,11 +1,14 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 
 from app.dependencies import CurrentTask, CurrentUser, SessionDep
 from app.models.tasks import Task
 from app.schema.tasks import (
     TaskCreate,
     TaskList,
+    TaskListQueryParams,
     TaskPartialUpdate,
     TaskPublic,
     TaskUpdate,
@@ -52,20 +55,42 @@ def create_task(
 def list_tasks(
     user: CurrentUser,
     db: SessionDep,
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=10, ge=1, le=100),
+    query_params: Annotated[TaskListQueryParams, Query()],
 ) -> TaskList:
-    query = select(Task).where(Task.user_id == user.id).order_by(Task.id)
-    total = db.execute(
-        select(func.count()).select_from(Task).where(Task.user_id == user.id)
-    ).scalar_one()
-    tasks = db.execute(query.offset((page - 1) * limit).limit(limit)).scalars().all()
+    query = select(Task).where(Task.user_id == user.id)
+    count_query = select(func.count()).select_from(Task).where(Task.user_id == user.id)
+
+    if query_params.search:
+        query = query.where(Task.title.ilike(f"%{query_params.search}%"))
+        count_query = count_query.where(Task.title.ilike(f"%{query_params.search}%"))
+
+    if query_params.task_status:
+        query = query.where(Task.status.in_(query_params.task_status))
+        count_query = count_query.where(Task.status.in_(query_params.task_status))
+
+    sort_column = getattr(Task, query_params.sort or "id")
+    sort_order = query_params.order or "asc"
+    if sort_order == "desc":
+        sort_column = desc(sort_column)
+
+    query = query.order_by(sort_column)
+
+    tasks = (
+        db.execute(
+            query.offset((query_params.page - 1) * query_params.limit).limit(
+                query_params.limit
+            )
+        )
+        .scalars()
+        .all()
+    )
+    total = db.execute(count_query).scalar_one()
 
     return TaskList(
         data=[TaskPublic.model_validate(task) for task in tasks],
         total=total,
-        page=page,
-        limit=limit,
+        page=query_params.page,
+        limit=query_params.limit,
     )
 
 
